@@ -32,7 +32,7 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
     ports:
-      - "5003:5003" 
+      - "8003:8000" 
 
   inventory-service:
     build:
