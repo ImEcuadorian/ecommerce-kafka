@@ -54,4 +54,4 @@ def index():
 
 if __name__ == '__main__':
     threading.Thread(target=listen_to_kafka, daemon=True).start()
-    app.run(host='0.0.0.0', port=5003)
+    app.run(host='0.0.0.0', port=8000)
