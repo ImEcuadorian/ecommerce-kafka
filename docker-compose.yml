@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.2
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.2
+    depends_on: [zookeeper]
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  #order-service:
+    # ...
+    #networks:
+    #  - kafka-net
+
+  #notification-service:
+    # ...
+   # networks:
+    #  - kafka-net
+
+  inventory-service:
+    build:
+      context: ./inventory-service
+      dockerfile: src/Dockerfile
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BOOTSTRAP=kafka:9092
+    ports:
+      - "8001:8001"
+    volumes:
+      - inventory-data:/app/src/app
+    networks:
+      - kafka-net
+    restart: unless-stopped
+
+networks:
+  kafka-net:
+    driver: bridge
+
+volumes:
+  inventory-data:
