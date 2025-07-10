@@ -8,4 +8,7 @@ COPY src ./src
 
 EXPOSE 8000
 
-CMD ["python", "src/app/notification.py"]
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "-u", "src/app/notification.py"]
+

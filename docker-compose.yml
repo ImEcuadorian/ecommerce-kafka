@@ -1,23 +1,46 @@
-version: '3.8'
-
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.2
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+    networks:
+      - kafka-net
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
 
   kafka:
     image: confluentinc/cp-kafka:7.5.2
-    depends_on: [zookeeper]
+    depends_on: [ zookeeper ]
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_BROKER_ID: 1
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - kafka-net
+    command: >
+      bash -c "
+        echo 'rmr /brokers/ids/${KAFKA_BROKER_ID}' | zkCli.sh -server zookeeper:2181 >/dev/null 2>&1 || true &&
+        /etc/confluent/docker/run
+      "
+    volumes:
+      - kafka-data:/var/lib/kafka/data
 
-  #order-service:
-    # ...
-    #networks:
-    #  - kafka-net
+  order-service:
+    build: ./order-service
+    depends_on:
+      - kafka
+    networks:
+      - kafka-net
+    ports:
+      - "8002:8000"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
   notification-service:
     build:
@@ -32,27 +55,40 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
     ports:
-      - "8003:8000" 
+      - "8003:8000"
+    networks:
+      - kafka-net
 
   inventory-service:
-    build:
-      context: ./inventory-service
-      dockerfile: src/Dockerfile
+    build: ./inventory-service
     depends_on:
       - kafka
-    environment:
-      - KAFKA_BOOTSTRAP=kafka:9092
+    networks:
+      - kafka-net
     ports:
       - "8001:8001"
     volumes:
-      - inventory-data:/app/src/app
-    networks:
-      - kafka-net
-    restart: unless-stopped
-
+      - inventory-data:/app/data
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 networks:
   kafka-net:
     driver: bridge
 
 volumes:
   inventory-data:
+  zookeeper-data:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+  zookeeper-log:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+  kafka-data:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs

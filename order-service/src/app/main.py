@@ -7,15 +7,13 @@ from contextlib import asynccontextmanager
 from src.app.db import init_db
 from src.app.routers.orders import router as orders_router
 
-
-@asynccontextmanager
-async def lifespan():
-    init_db()
-    yield
-
 app = FastAPI(
     title="Order Service",
 )
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 # Registramos el router
 app.include_router(orders_router, prefix="/api/orders", tags=["orders"])

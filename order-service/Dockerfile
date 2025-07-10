@@ -3,7 +3,6 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# install system deps
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential \

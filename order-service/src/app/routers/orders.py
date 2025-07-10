@@ -18,12 +18,13 @@ def get_db():
 @router.post("/", response_model=OrderSchema, status_code=status.HTTP_201_CREATED)
 def create_order(
         order: OrderCreate,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
 ):
     new = OrderORM(
         customer_name=order.customer_name,
+        customer_email=order.customer_email,
         items=[item.model_dump() for item in order.items],
-        total=order.total
+        total=order.total,
     )
     db.add(new)
     db.commit()
@@ -31,10 +32,11 @@ def create_order(
 
     send_order_event({
         "id": new.id,
-        "customer_name": new.customer_name,
+        "order_id": new.id,                     # usa siempre order_id
+        "customer_email": new.customer_email,   # <<< aquí
         "items": new.items,
         "total": new.total,
-        "created_at": new.created_at.isoformat()
+        "created_at": new.created_at.isoformat(),
     })
 
     return new

@@ -6,13 +6,15 @@ from sqlalchemy.sql import func
 from sqlalchemy.types import JSON
 from .db            import Base
 
-from pydantic       import BaseModel
+from pydantic import BaseModel, EmailStr
+
 
 class OrderORM(Base):
     __tablename__ = "orders"
 
     id            = Column(Integer, primary_key=True, index=True)
     customer_name = Column(Text,    nullable=False)
+    customer_email= EmailStr
     items         = Column(JSON,    nullable=False)
     total         = Column(Float,   nullable=False)
     created_at    = Column(
@@ -27,6 +29,7 @@ class Item(BaseModel):
 
 class OrderCreate(BaseModel):
     customer_name: str
+    customer_email: EmailStr
     items:          List[Item]
     total:          float
 
