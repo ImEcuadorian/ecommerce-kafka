@@ -1,12 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = "sqlite:///./orders.db"
-
+DATABASE_URL = "postgresql://postgres:root@db-order-service:5432/orders_db"
 engine = create_engine(
     DATABASE_URL,
-    echo=True,
-    connect_args={"check_same_thread": False}
+    echo=True
 )
 
 SessionLocal = sessionmaker(

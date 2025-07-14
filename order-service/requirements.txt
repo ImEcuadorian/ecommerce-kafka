@@ -5,3 +5,4 @@ SQLAlchemy
 aiosqlite
 pydantic
 email-validator
+psycopg2-binary

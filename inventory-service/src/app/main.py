@@ -1,24 +1,66 @@
+import os
 import json
-import sqlite3
 import threading
 import time
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable
 from pydantic import BaseModel, Field
+import psycopg2
+from psycopg2 import pool
+from psycopg2.extras import RealDictCursor
 
 # ——— Configuración básica —————————————————————————————
-BASE = Path(__file__).parent
-DB_PATH = BASE / "inventory.db"
-KAFKA_BOOTSTRAP = "kafka:9092"
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
+DATABASE_URL   = os.getenv("DATABASE_URL", "postgresql://postgres:root@db-inventory-service:5432/inventory_db")
 
 # Definición de topics
 TOPIC_CONSUME = "order-confirmed"
 TOPIC_PRODUCE = "order-validated"
 
 app = FastAPI(title="Inventory Service")
+
+# ——— Configuración del pool de conexiones Postgres ———————————
+db_pool: pool.ThreadedConnectionPool | None = None
+
+@app.on_event("startup")
+def startup():
+    global db_pool
+    # Inicializa pool: min 1, max 10 conexiones
+    db_pool = psycopg2.pool.ThreadedConnectionPool(
+        minconn=1,
+        maxconn=10,
+        dsn=DATABASE_URL,
+        cursor_factory=RealDictCursor
+    )
+    # Asegura que la tabla exista
+    conn = db_pool.getconn()
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                        CREATE TABLE IF NOT EXISTS products (
+                                                                id    INTEGER PRIMARY KEY,
+                                                                name  TEXT    NOT NULL,
+                                                                stock INTEGER NOT NULL
+                        );
+                        """)
+    db_pool.putconn(conn)
+
+@app.on_event("shutdown")
+def shutdown():
+    if db_pool:
+        db_pool.closeall()
+
+# ——— Helper para obtener conexión ————————————————————————
+def get_db_conn():
+    if not db_pool:
+        raise RuntimeError("DB pool no inicializado")
+    return db_pool.getconn()
+
+def release_db_conn(conn):
+    if db_pool:
+        db_pool.putconn(conn)
 
 # ——— Producer de Kafka (lazy init) ———————————————————————
 producer: KafkaProducer | None = None
@@ -36,37 +78,46 @@ class StockUpdate(BaseModel):
     product_id: int = Field(alias="productId")
     quantity:    int
 
-# ——— Conexión a SQLite ———————————————————————————————
-def get_db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-db = get_db()
-
 # ——— Endpoints HTTP ————————————————————————————————————
 @app.get("/inventory/{product_id}")
 def read_stock(product_id: int):
-    c = db.cursor()
-    c.execute("SELECT id, name, stock FROM products WHERE id = ?", (product_id,))
-    row = c.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Producto no encontrado")
-    return {"id": row["id"], "name": row["name"], "stock": row["stock"]}
+    conn = get_db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, name, stock FROM products WHERE id = %s;",
+                (product_id,)
+            )
+            product = cur.fetchone()
+        if not product:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        return product
+    finally:
+        release_db_conn(conn)
 
 @app.post("/inventory/update")
 def update_stock(u: StockUpdate):
-    c = db.cursor()
-    c.execute("SELECT stock FROM products WHERE id = ?", (u.product_id,))
-    row = c.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Producto no existe")
-    new_stock = row["stock"] - u.quantity
-    if new_stock < 0:
-        raise HTTPException(status_code=400, detail="Stock insuficiente")
-    c.execute("UPDATE products SET stock = ? WHERE id = ?", (new_stock, u.product_id))
-    db.commit()
-    return {"product_id": u.product_id, "new_stock": new_stock}
+    conn = get_db_conn()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT stock FROM products WHERE id = %s;",
+                    (u.product_id,)
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Producto no existe")
+                new_stock = row["stock"] - u.quantity
+                if new_stock < 0:
+                    raise HTTPException(status_code=400, detail="Stock insuficiente")
+                cur.execute(
+                    "UPDATE products SET stock = %s WHERE id = %s;",
+                    (new_stock, u.product_id)
+                )
+        return {"product_id": u.product_id, "new_stock": new_stock}
+    finally:
+        release_db_conn(conn)
 
 # ——— Listener de Kafka en background —————————————————————
 def kafka_listener():
@@ -103,6 +154,7 @@ def kafka_listener():
         errores = False
         for item in items:
             try:
+                # Reutilizamos el endpoint interno
                 update_stock(StockUpdate(**item))
                 print(f"✔️ Reduced stock for {item}")
             except HTTPException as e:
@@ -112,7 +164,6 @@ def kafka_listener():
                 errores = True
                 print(f"⚠️ Unexpected error for {item}: {e}")
 
-        # 3) Si todo salió bien, enviamos evento validado CON email
         if not errores:
             validated_event = {
                 "type": "order_validated",

@@ -3,3 +3,4 @@ uvicorn
 kafka-python
 databases[sqlite]
 confluent-kafka
+psycopg2-binary
