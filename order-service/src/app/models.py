@@ -1,7 +1,7 @@
 from datetime       import datetime
 from typing         import List
 
-from sqlalchemy     import Column, Integer, Float, Text, DateTime as SaDateTime
+from sqlalchemy import Column, Integer, Float, Text, DateTime as SaDateTime, String
 from sqlalchemy.sql import func
 from sqlalchemy.types import JSON
 from .db            import Base
@@ -14,7 +14,7 @@ class OrderORM(Base):
 
     id            = Column(Integer, primary_key=True, index=True)
     customer_name = Column(Text,    nullable=False)
-    customer_email= EmailStr
+    customer_email = Column(String, nullable=False)
     items         = Column(JSON,    nullable=False)
     total         = Column(Float,   nullable=False)
     created_at    = Column(

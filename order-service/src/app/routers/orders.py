@@ -27,8 +27,10 @@ def create_order(
         total=order.total,
     )
     db.add(new)
-    db.commit()
+    db.flush()
     db.refresh(new)
+    db.commit()
+
 
     send_order_event({
         "id": new.id,
