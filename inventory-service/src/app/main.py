@@ -30,7 +30,7 @@ def startup():
     # Inicializa pool: min 1, max 10 conexiones
     db_pool = psycopg2.pool.ThreadedConnectionPool(
         minconn=1,
-        maxconn=10,
+        maxconn=100,
         dsn=DATABASE_URL,
         cursor_factory=RealDictCursor
     )

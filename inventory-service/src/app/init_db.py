@@ -3,9 +3,9 @@ import psycopg2
 from psycopg2 import sql
 
 initial_products = [
-    {"id": 1, "name": "Camiseta",   "stock": 100},
-    {"id": 2, "name": "Pantalones", "stock": 50},
-    {"id": 3, "name": "Gorra",      "stock": 75},
+    {"id": 1, "name": "Camiseta",   "stock": 1000000},
+    {"id": 2, "name": "Pantalones", "stock": 1000000},
+    {"id": 3, "name": "Gorra",      "stock": 1000000},
 ]
 
 def init():

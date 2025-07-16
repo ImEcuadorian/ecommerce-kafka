@@ -65,7 +65,7 @@ def listen_to_kafka():
             f"Tu pedido #{order_id} ha sido confirmado y el stock ha sido reservado.\n"
             "Gracias por tu compra."
         )
-        send_email(to_email, subject, body)
+        #send_email(to_email, subject, body)
 
 @app.route('/')
 def index():
